@@ -113,6 +113,7 @@ th{color:var(--mute);font-weight:600;font-size:13px}
 .vals{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
 .vb{border:0;border-radius:6px;padding:4px 9px;min-height:32px;color:#fff;font-size:12px;font-weight:600}
 .vb.n{background:var(--n)}.vb.e{background:var(--e)}.vb.ok{background:var(--acc)}
+.zc{border:1px solid var(--line);background:var(--panel);border-radius:12px;padding:1px 8px;font-size:12px;color:var(--mute);min-height:24px;margin-left:4px}.zc.zq{border-style:dashed}
 .tag.au{background:color-mix(in srgb,var(--acc) 8%,transparent)}
 .autoc{margin-top:12px}
 .pendn{font-weight:600;color:var(--acc)}
@@ -172,6 +173,8 @@ ol.help{padding-left:20px}ol.help li{margin:6px 0}
           <select class="btn sm" id="aStep" aria-label="Cadence"><option value="2" selected>1 image / 2 s (conseillé)</option><option value="1">1 image / s (plus précis, 2× plus long)</option><option value="3">1 image / 3 s (plus rapide)</option></select>
           <button class="btn pri sm" id="bAuto">Lancer l'analyse</button>
           <button class="btn sm" id="bNext" disabled>Suivante à valider</button>
+          <button class="btn sm" id="bZone">Situer les actions sur le terrain</button>
+          <button class="btn sm" id="bFlip" title="Si les zones « notre camp / leur camp » sont à l'envers">Inverser le sens</button>
           <label class="chk"><input type="checkbox" id="autoChain" checked> enchaîner après chaque validation</label>
         </div>
         <div class="prog hid" id="prog"><div class="pb"><b id="pbar"></b></div><span id="pTxt" class="num"></span></div>
@@ -228,6 +231,11 @@ ol.help{padding-left:20px}ol.help li{margin:6px 0}
         <h2 style="margin:0 0 6px;font-size:22px">Par joueur</h2>
         <div class="scroll" id="players"></div>
         <p class="help">Seules les actions saisies avec un numéro apparaissent ici. Les noms viennent de la feuille de match (bouton « Match… »).</p>
+      </div>
+      <div class="card" style="margin-top:12px">
+        <h2 style="margin:0 0 6px;font-size:22px">Où se jouent les phases</h2>
+        <div class="scroll" id="zones"></div>
+        <p class="help">Zones repérées avec « Situer les actions sur le terrain ». Clique sur une zone dans le journal pour la corriger.</p>
       </div>
     </div>
   </div>
@@ -389,7 +397,7 @@ document.addEventListener('keydown',e=>{
 });
 
 /* ---------- calculs ---------- */
-function halfOf(m,t){const h=m.tags.find(x=>x.e==='half');return h&&t>=h.t?2:1}
+function halfOf(m,t){const h=m.tags.find(x=>x.e==='half');if(h)return t>=h.t?2:1;return m.dur&&t>=m.dur/2?2:1}
 function roster(m){const r={};(m.roster||'').split('\n').forEach(l=>{const x=l.trim().match(/^(\d{1,2})[\s.\-:]+(.+)$/);if(x)r[+x[1]]=x[2].trim()});return r}
 function nameOf(m,n){return roster(m)[n]||''}
 function score(m,half){const s={n:0,e:0};m.tags.forEach(t=>{const p=EVM[t.e]&&EVM[t.e].pts;if(p&&t.team&&(!half||halfOf(m,t.t)===half))s[t.team]+=p});return s}
@@ -434,14 +442,15 @@ function renderTags(){
   const m=M(),ft=$('#fTeam').value,fe=$('#fEv').value,fp=+$('#fP').value;
   const list=[...m.tags].filter(t=>(!ft||t.team===ft)&&(!fe||(fe==='__auto'?t.auto:t.e===fe))&&(!fp||t.p===fp)).sort((a,b)=>fe==='__auto'?a.t-b.t:b.t-a.t);
   const np=m.tags.filter(t=>t.auto).length;$('#nPend').textContent=np?np+' à valider':'';$('#bNext').disabled=!np;
-  $('#tags').innerHTML=list.length?list.map(t=>'<div class="tag'+(t.auto?' au':'')+'"><button class="t" data-s="'+t.t+'">'+fmt(t.t)+'</button><span class="dot" style="background:'+(t.team==='n'?'var(--n)':t.team==='e'?'var(--e)':'var(--mute)')+'"></span><span>'+esc(label(t))+(t.auto?' <span class="badge">à valider</span> <span class="note">'+(HINT[t.e]||'')+'</span>':'')+(t.note?' <span class="note">· '+esc(t.note)+'</span>':'')+
+  $('#tags').innerHTML=list.length?list.map(t=>'<div class="tag'+(t.auto?' au':'')+'"><button class="t" data-s="'+t.t+'">'+fmt(t.t)+'</button><span class="dot" style="background:'+(t.team==='n'?'var(--n)':t.team==='e'?'var(--e)':'var(--mute)')+'"></span><span>'+esc(label(t))+(t.auto?' <span class="badge">à valider</span> <span class="note">'+(HINT[t.e]||'')+'</span>':'')+(t.note?' <span class="note">· '+esc(t.note)+'</span>':'')+(ZEV.includes(t.e)?' <button class="zc'+(t.z?'':' zq')+'" data-z="'+t.id+'" title="Cliquer pour corriger la zone">'+(t.z?esc(zoneLabel(m,t)):'zone ?')+'</button>':'')+
     (t.auto&&VAL[t.e]?'<span class="vals">'+VAL[t.e].map(v=>'<button class="vb '+(v[1]||'ok')+'" data-v="'+t.id+'|'+v[0]+'|'+v[1]+'">'+v[2]+'</button>').join('')+'</span>':'')+
     '</span><span class="p">'+(t.p?'N°'+t.p+' '+esc(nameOf(m,t.p)):'')+'</span><button class="del" data-d="'+t.id+'" aria-label="Supprimer">×</button></div>').join(''):'<p class="help" style="padding:10px 0">Aucune action pour l\'instant. Lance la vidéo et utilise le pupitre ou le clavier, ou lance l\'analyse automatique.</p>';
 }
 function nextPending(){const m=M(),now=P?P.time():0,pend=m.tags.filter(t=>t.auto).sort((a,b)=>a.t-b.t);if(!pend.length)return;
   const nx=pend.find(t=>t.t>now+1)||pend[0];if(P){P.seek(nx.t-4);P.play()}toast(fmt(nx.t)+' · '+label(nx)+' : à valider')}
 $('#tags').addEventListener('click',e=>{
-  const s=e.target.closest('[data-s]'),d=e.target.closest('[data-d]'),v=e.target.closest('[data-v]');
+  const s=e.target.closest('[data-s]'),d=e.target.closest('[data-d]'),v=e.target.closest('[data-v]'),zb=e.target.closest('[data-z]');
+  if(zb){const t=M().tags.find(x=>x.id===zb.dataset.z);if(t){const at=attackEnd(M(),halfOf(M(),t.t));const order=at?[at,'M',at==='A'?'B':'A',null]:['A','M','B',null];t.z=order[(order.indexOf(t.z??null)+1)%order.length];save();renderTags()}return}
   if(s&&P){P.seek(+s.dataset.s-4);P.play()}
   if(d){const m=M(),x=m.tags.find(t=>t.id===d.dataset.d);m.tags=m.tags.filter(t=>t.id!==d.dataset.d&&!(x&&x.pair&&t.id===x.pair));save();renderAll()}
   if(v){const m=M(),[id,ev,team]=v.dataset.v.split('|'),t=m.tags.find(x=>x.id===id);if(!t)return;
@@ -484,6 +493,13 @@ function renderStats(){
   const nums=Object.keys(pl).map(Number).sort((a,b)=>a-b);
   const g=(o,id)=>o[id]||0;
   $('#players').innerHTML=nums.length?'<table><thead><tr><th>Joueur</th><th>Plaq.</th><th>Manq.</th><th>%</th><th>Gratt.</th><th>Franch.</th><th>Essais</th><th>En-av.</th><th>Pén.</th></tr></thead><tbody>'+nums.map(nu=>{const o=pl[nu];return '<tr><td class="l">'+nu+' '+esc(nameOf(m,nu))+'</td><td>'+g(o,'tk')+'</td><td>'+g(o,'tkm')+'</td><td>'+pct(g(o,'tk'),g(o,'tk')+g(o,'tkm'))+'</td><td>'+g(o,'to')+'</td><td>'+g(o,'brk')+'</td><td>'+g(o,'try')+'</td><td>'+g(o,'fwd')+'</td><td>'+g(o,'pen')+'</td></tr>'}).join('')+'</tbody></table>':'<p class="help">Pas encore d\'action attribuée à un joueur.</p>';
+  const ZR=[['Mêlées gagnées (nous)',t=>t.e==='scw'&&t.team==='n'],['Mêlées perdues (nous)',t=>t.e==='scl'&&t.team==='n'],['Mêlées adverses',t=>(t.e==='scw'||t.e==='scl')&&t.team==='e'],
+    ['Touches gagnées (nous)',t=>t.e==='low'&&t.team==='n'],['Touches perdues (nous)',t=>t.e==='lol'&&t.team==='n'],['Touches adverses',t=>(t.e==='low'||t.e==='lol')&&t.team==='e'],
+    ['Pénalités contre nous',t=>t.e==='pen'&&t.team==='n'],['Pénalités contre eux',t=>t.e==='pen'&&t.team==='e'],['Essais marqués',t=>t.e==='try'&&t.team==='n'],['Essais encaissés',t=>t.e==='try'&&t.team==='e']];
+  const zt=m.tags.filter(t=>!H||halfOf(m,t.t)===H),cols=['own','mil','adv'];
+  const cnt=(f,c)=>zt.filter(t=>f(t)&&zoneOf(m,t)===c).length;
+  const anyZ=zt.some(t=>t.z);
+  $('#zones').innerHTML=anyZ?'<table><thead><tr><th>Action</th><th>Notre camp</th><th>Milieu</th><th>Leur camp</th></tr></thead><tbody>'+ZR.map(([l,f])=>'<tr><td class="l">'+l+'</td>'+cols.map(c=>'<td>'+(cnt(f,c)||'·')+'</td>').join('')+'</tr>').join('')+'</tbody></table>'+(attackEnd(m,1)?'':'<p class="help">Valide au moins un essai pour que l\'appli sache de quel côté vous attaquez.</p>'):'<p class="help">Pas encore de zones : lance « Situer les actions sur le terrain » dans l\'onglet Saisie.</p>';
   drawRibbon();
 }
 function drawRibbon(){
@@ -655,6 +671,55 @@ function applyAuto(m){
     add.push(Object.assign({id:uid(),t:s.a,e:'dead',team:null,g:1,pair:L.id},known?{}:{auto:1}))});
   m.tags=keep.concat(add);
 }
+
+/* ---------- zones du terrain ---------- */
+const ZEV=['a_sc','a_lo','a_try','a_con','a_pen','scw','scl','low','lol','try','con','conx','pen'];
+const TRYEV=['a_try','a_con','try','con','conx'];
+const ZD=200,ZH=30,zCv=document.createElement('canvas');zCv.width=ZD;zCv.height=ZH;const zCx=zCv.getContext('2d',{willReadFrequently:true});
+function zDesc(v){zCx.drawImage(v,0,v.videoHeight*.04,v.videoWidth,v.videoHeight*.24,0,0,ZD,ZH);const d=zCx.getImageData(0,0,ZD,ZH).data,g=new Float32Array(ZD*ZH);for(let i=0;i<ZD*ZH;i++)g[i]=d[i*4]*.3+d[i*4+1]*.59+d[i*4+2]*.11;return g}
+function zNcc(a,b,sh){let sa=0,sb=0,saa=0,sbb=0,sab=0,n=0;for(let y=0;y<ZH;y++)for(let x=Math.max(0,sh);x<Math.min(ZD,ZD+sh);x++){const p=a[y*ZD+x],q=b[y*ZD+x-sh];sa+=p;sb+=q;saa+=p*p;sbb+=q*q;sab+=p*q;n++}const c=sab/n-sa/n*sb/n,va=saa/n-(sa/n)**2,vb=sbb/n-(sb/n)**2;return c/Math.sqrt(va*vb+1e-6)}
+function zSim(a,b){let best=-1;for(let s=-70;s<=70;s+=2)best=Math.max(best,zNcc(a,b,s));return best}
+/* ligne médiane : ligne blanche quasi verticale qui descend jusqu'au bas de l'image (la caméra Veo est dans l'axe du milieu de terrain) */
+function zHalfway(){const W=A.W,H=A.H,d=aCx.getImageData(0,0,W,H).data,o=5,y0=Math.round(H*.5),pts=[];
+  for(let y=y0;y<H-o;y++)for(let x=o;x<W-o;x++){const i=(y*W+x)*4,sat=Math.max(d[i],d[i+1],d[i+2])-Math.min(d[i],d[i+1],d[i+2]);if(sat>50)continue;
+    const L=k=>(d[k]+d[k+1]+d[k+2])/3,Gr=k=>d[k+1]>d[k]+4&&d[k+1]>d[k+2]+4,l=i-o*4,r=i+o*4;if(Gr(l)&&Gr(r)&&L(i)-(L(l)+L(r))/2>25)pts.push(x,y)}
+  let best=0;for(let a=-8;a<=8;a++){const tn=Math.tan(a*Math.PI/180),acc=new Int32Array(W+400);for(let k=0;k<pts.length;k+=2){const r=Math.round(pts[k]-(pts[k+1]-H)*tn)+200;if(r>=0&&r<W+400)acc[r]++}
+    for(let r=1;r<W+399;r++)best=Math.max(best,acc[r-1]+acc[r]+acc[r+1])}
+  return best}
+function attackEnd(m,h){ // en-but attaqué par nous à la mi-temps h
+  let a=0,b=0;m.tags.filter(t=>t.e==='try'&&t.team&&(t.z==='A'||t.z==='B')).forEach(t=>{let e=t.z;if(t.team==='e')e=e==='A'?'B':'A';if(halfOf(m,t.t)===2)e=e==='A'?'B':'A';e==='A'?a++:b++});
+  let e=a>b?'A':b>a?'B':null;if(!e)return null;if(m.flip)e=e==='A'?'B':'A';return h===2?(e==='A'?'B':'A'):e}
+const ZL={adv:'Près de leur en-but',mil:'Milieu de terrain',own:'Près de notre en-but'};
+function zoneOf(m,t){if(!t.z)return null;if(t.z==='M')return 'mil';const at=attackEnd(m,halfOf(m,t.t));if(!at)return t.z;return t.z===at?'adv':'own'}
+function zoneLabel(m,t){const z=zoneOf(m,t);if(!z)return '';return ZL[z]||('Côté en-but '+(z==='A'?'1':'2'))}
+async function situate(){
+  const m=M(),list=m.tags.filter(t=>ZEV.includes(t.e));if(!list.length)return toast('Importe d\'abord les actions Veo (ou valide des actions)');
+  const src=aSrc();if(!src)return;
+  const b=$('#bZone');b.disabled=true;$('#prog').classList.remove('hid');
+  try{
+    aStatus('Ouverture de la vidéo…');
+    const v=document.createElement('video');v.crossOrigin='anonymous';v.muted=true;v.preload='auto';v.src=src.url;
+    await new Promise((res,rej)=>{v.onloadedmetadata=res;v.onerror=()=>rej(new Error('cors'))});m.dur=v.duration;
+    const D={};let k=0;
+    for(const t of list){const tt=Math.min(v.duration-1,t.t+(t.veo||String(t.e).startsWith('a_')?4:0));await seekV(v,tt);aCx.drawImage(v,0,0,A.W,A.H);
+      let g;try{g=zDesc(v)}catch(e){throw new Error('cors')}D[t.id]={g,hw:zHalfway()};k++;
+      $('#pbar').style.width=(100*k/list.length)+'%';aStatus('Repérage des zones · '+k+'/'+list.length)}
+    const anc=list.filter(t=>TRYEV.includes(t.e));
+    let gA=[],gB=[];
+    if(anc.length>=2){const s0=anc[0];let far=anc[1],fs=9;anc.slice(1).forEach(a=>{const x=zSim(D[a.id].g,D[s0.id].g);if(x<fs){fs=x;far=a}});
+      anc.forEach(a=>{(zSim(D[a.id].g,D[s0.id].g)>=zSim(D[a.id].g,D[far.id].g)?gA:gB).push(a)})}
+    list.forEach(t=>{const x=D[t.id];if(x.hw>=200){t.z='M';return}
+      if(!gA.length&&!gB.length){t.z=null;return}
+      const sA=Math.max(-1,...gA.map(a=>a===t?-1:zSim(x.g,D[a.id].g))),sB=Math.max(-1,...gB.map(a=>a===t?-1:zSim(x.g,D[a.id].g)));
+      if(gA.includes(t)&&!gB.includes(t)&&sA<.45){t.z='A';return}if(gB.includes(t)&&sB<.45){t.z='B';return}
+      t.z=Math.max(sA,sB)<.45?null:(sA>=sB?'A':'B')});
+    save();renderAll();
+    const at=attackEnd(m,1);
+    aStatus('Zones repérées'+(at?'':' · valide un essai (Nous ou Eux) pour savoir de quel côté vous attaquez'));
+  }catch(e){aStatus(e.message==='cors'?'Cette vidéo ne peut pas être analysée depuis ce lien.':'Repérage impossible : '+e.message)}
+  b.disabled=false;
+}
+
 /* ---------- import Veo ---------- */
 const SETP=['a_sc','a_lo','a_pen','scw','scl','low','lol','pen'];
 const VEOMAP={scrum:'a_sc',lineout:'a_lo',try_:'a_try',try:'a_try',conversion:'a_con',penalty:'a_pen',penalty_kick:'a_pen'};
@@ -672,6 +737,8 @@ function importVeo(){
   toast(n+' actions Veo importées · à toi de dire qui les a gagnées');
 }
 $('#bVeo').onclick=importVeo;
+$('#bZone').onclick=situate;
+$('#bFlip').onclick=()=>{const m=M();m.flip=!m.flip;save();renderAll();toast('Sens d\'attaque inversé')};
 $('#bAuto').onclick=runAuto;
 $('#bNext').onclick=nextPending;
 $('#sens').oninput=()=>{applyAuto(M());save();renderAll()};
