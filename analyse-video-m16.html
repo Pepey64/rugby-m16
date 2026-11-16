@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Analyse vidéo M16</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: salle vidéo du staff, sobre et rapide, pensée pour le bord de terrain et la tablette
+   IDEA: la feuille de stats du match qu'on remplit en regardant la vidéo
+   PICTURE: le lecteur vidéo + le ruban de possession du match
+   COLOUR and TYPE: pelouse sombre, bleu Seignanx / rouge adversaire ; Barlow Condensed pour les chiffres
+   LAYOUT: vidéo à gauche, pupitre de saisie à droite, journal des actions dessous ; empilé sur mobile */
+:root{color-scheme:light dark;
+--bg:light-dark(#f3f5f2,#101512);--panel:light-dark(#ffffff,#18201b);--line:light-dark(#d9dfd8,#2a352e);
+--ink:light-dark(#141a16,#e8eee9);--mute:light-dark(#5c6a60,#93a397);--n:#1f5fbf;--e:#c8352b;--acc:#1f8a4c}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 Barlow,system-ui,sans-serif;overflow-x:clip}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.num,.big,h1,h2{font-family:"Barlow Condensed",Barlow,sans-serif}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:10px max(2vw,12px);background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+h1{font-size:24px;margin:0;line-height:1}
+.match{color:var(--mute);font-size:14px}
+nav{display:flex;gap:4px;margin-left:auto;flex-wrap:wrap}
+nav button,.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:8px 14px;min-height:40px}
+nav button.on{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff}
+.btn.sm{padding:4px 10px;min-height:32px;font-size:13px}
+main{padding:12px max(2vw,12px) 40px}
+.view{display:none}.view.on{display:block}
+.ana{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(300px,1fr);gap:12px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:12px}
+.vid{position:relative;aspect-ratio:16/9;background:#000;border-radius:10px;overflow:hidden}
+.vid video,.vid iframe,.vid #yt{position:absolute;inset:0;width:100%;height:100%;border:0}
+.empty{position:absolute;inset:0;display:grid;place-items:center;text-align:center;color:#cfd8d2;padding:20px}
+.src{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.src input[type=url]{flex:1 1 260px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;font-size:16px}
+.ctrl{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:10px}
+.clock{font-family:"Barlow Condensed";font-size:26px;min-width:84px}
+.half{font-size:13px;color:var(--mute)}
+.pend{margin-left:auto;background:var(--n);color:#fff;border-radius:6px;padding:3px 10px;font-weight:600;display:none}
+.pend.on{display:inline-block}
+.pad h2{font-size:15px;text-transform:none;margin:12px 0 6px;color:var(--mute);font-family:Barlow;font-weight:600}
+.pad h2:first-child{margin-top:0}
+.row{display:grid;grid-template-columns:minmax(0,1fr) 62px 62px;gap:5px;align-items:center;margin-bottom:5px}
+.row span{font-size:14px}
+.row kbd{font:600 11px Barlow;border:1px solid var(--line);border-radius:4px;padding:0 5px;color:var(--mute);margin-left:4px}
+.tb{border:0;border-radius:7px;min-height:38px;color:#fff;font-weight:600;font-size:13px}
+.tb.n{background:var(--n)}.tb.e{background:var(--e)}.tb.x{background:var(--mute);grid-column:2/4}
+.tb:active{transform:scale(.96)}
+.flash{animation:fl .35s}
+@keyframes fl{from{box-shadow:0 0 0 4px var(--acc)}to{box-shadow:0 0 0 0 transparent}}
+.score{display:flex;justify-content:center;align-items:center;gap:14px;margin-bottom:6px}
+.score .big{font-size:40px;line-height:1}
+.score .nm{font-size:13px;color:var(--mute);text-align:center}
+.log{margin-top:12px}
+.logh{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px}
+.logh h2{margin:0 auto 0 0;font-size:20px}
+.logh select{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:6px 8px;min-height:36px}
+.tags{max-height:340px;overflow:auto;border-top:1px solid var(--line)}
+.tag{display:grid;grid-template-columns:62px 10px minmax(0,1fr) auto 30px;gap:8px;align-items:center;padding:6px 2px;border-bottom:1px solid var(--line)}
+.tag .t{font-family:"Barlow Condensed";font-size:17px;background:none;border:0;text-align:left;color:var(--acc);padding:0}
+.dot{width:10px;height:10px;border-radius:50%}
+.tag .p{font-weight:600;font-size:13px;color:var(--mute)}
+.del{border:0;background:none;color:var(--mute);font-size:18px}
+.note{color:var(--mute);font-size:13px}
+.help{font-size:13px;color:var(--mute);margin-top:10px}
+/* stats */
+.sh{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:12px}
+.sh h2{font-size:30px;margin:0 auto 0 0;line-height:1.05}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;background:var(--panel);padding:8px 12px;min-height:40px}
+.seg button.on{background:var(--ink);color:var(--bg)}
+.board{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:12px}
+.bigsc{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;text-align:center;gap:10px;padding:8px 0 14px}
+.bigsc .big{font-size:clamp(48px,9vw,84px);line-height:.9}
+.bigsc .nm{font-weight:600}
+.fig{position:relative;height:90px;margin:4px 0 6px}
+.fig svg{position:absolute;inset:0;width:100%;height:100%}
+.leg{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--mute)}
+.leg i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:5px}
+.cmp{display:grid;grid-template-columns:70px minmax(0,1fr) 70px;gap:4px 10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}
+.cmp .v{font-family:"Barlow Condensed";font-size:20px;white-space:nowrap}
+.cmp .v.r{text-align:right}
+.cmp .lb{text-align:center;font-size:14px}
+.cmp .bar{grid-column:1/4;display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--line)}
+.cmp .bar b{display:block;background:var(--n)}.cmp .bar s{display:block;background:var(--e);margin-left:auto}
+.sub{font-size:12px;color:var(--mute)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 6px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child,th.l,td.l{text-align:left}
+th{color:var(--mute);font-weight:600;font-size:13px}
+.scroll{overflow-x:auto}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px;margin-bottom:12px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px}
+.kpi .big{font-size:32px;line-height:1}
+.kpi .sub{display:block;margin-top:2px}
+/* modal */
+.ov{position:fixed;inset:0;background:#0009;display:none;place-items:center;z-index:20;padding:12px}
+.ov.on{display:grid}
+.modal{background:var(--panel);border-radius:14px;padding:18px;width:min(560px,100%);max-height:92vh;overflow:auto}
+.modal h2{margin:0 0 12px;font-size:24px}
+.fld{display:grid;gap:4px;margin-bottom:10px;font-size:14px}
+.fld input,.fld select,.fld textarea{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;font-size:16px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:8px 16px;border-radius:8px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
+.toast.on{opacity:1}
+.badge{font:600 11px Barlow;background:var(--acc);color:#fff;border-radius:4px;padding:1px 6px;vertical-align:1px}
+.vals{display:flex;flex-wrap:wrap;gap:4px;margin-top:5px}
+.vb{border:0;border-radius:6px;padding:4px 9px;min-height:32px;color:#fff;font-size:12px;font-weight:600}
+.vb.n{background:var(--n)}.vb.e{background:var(--e)}.vb.ok{background:var(--acc)}
+.tag.au{background:color-mix(in srgb,var(--acc) 8%,transparent)}
+.autoc{margin-top:12px}
+.pendn{font-weight:600;color:var(--acc)}
+.chk{display:inline-flex;align-items:center;gap:6px;font-size:14px}
+.prog{display:flex;gap:10px;align-items:center;margin-top:10px}
+.pb{height:10px;background:var(--line);border-radius:5px;overflow:hidden;flex:1}
+.pb b{display:block;height:100%;background:var(--acc);width:0;transition:width .3s}
+details{margin-top:10px}summary{cursor:pointer;font-weight:600;font-size:14px}
+ol.help{padding-left:20px}ol.help li{margin:6px 0}
+.btn:disabled{opacity:.45;cursor:default}
+.hid{display:none}
+@media(max-width:900px){.ana,.board{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){h1{font-size:20px}nav{margin-left:0}.two{grid-template-columns:1fr}.tag{grid-template-columns:54px 10px minmax(0,1fr) auto 26px}}
+@media(prefers-reduced-motion:reduce){.flash{animation:none}.tb:active{transform:none}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Analyse vidéo M16</h1>
+  <div class="match" id="mInfo"></div>
+  <nav>
+    <button data-v="ana" class="on">Saisie</button>
+    <button data-v="sta">Stats du match</button>
+    <button data-v="sai">Saison</button>
+    <button id="bEdit">Match…</button>
+  </nav>
+</header>
+
+<main>
+<!-- SAISIE -->
+<section class="view on" id="v-ana">
+  <div class="ana">
+    <div>
+      <div class="card">
+        <div class="vid" id="vid"><div class="empty" id="empty">Colle un lien YouTube ou MP4 ci-dessous,<br>ou ouvre une vidéo enregistrée sur ton ordinateur.</div></div>
+        <div class="src">
+          <input type="url" id="url" placeholder="https://www.youtube.com/watch?v=…  ou lien .mp4">
+          <button class="btn pri" id="bLoad">Charger</button>
+          <label class="btn" style="display:inline-flex;align-items:center">Fichier vidéo…<input type="file" id="file" accept="video/*" class="hid"></label>
+        </div>
+        <div class="ctrl">
+          <button class="btn sm" data-sk="-10">−10 s</button>
+          <button class="btn sm" data-sk="-5">−5 s</button>
+          <button class="btn sm" id="bPlay">Lecture</button>
+          <button class="btn sm" data-sk="5">+5 s</button>
+          <button class="btn sm" data-sk="10">+10 s</button>
+          <select class="btn sm" id="rate" aria-label="Vitesse"><option value=".5">×0,5</option><option value="1" selected>×1</option><option value="1.5">×1,5</option><option value="2">×2</option></select>
+          <span class="clock" id="clock">00:00</span><span class="half" id="halfLbl">1re MT</span>
+          <span class="pend" id="pend"></span>
+        </div>
+      </div>
+
+      <div class="card autoc">
+        <div class="logh"><h2>Analyse automatique</h2><span class="pendn" id="nPend"></span></div>
+        <p class="help" style="margin-top:0"><b>Match filmé avec Veo</b> : importe d'abord les actions repérées par Veo (ci-dessous), c'est instantané. Tu n'as plus qu'à dire qui a gagné chaque mêlée, chaque touche, et qui a marqué.<br><b>Analyse vidéo</b> (facultative) : l'appli parcourt la vidéo, repère chaque arrêt de jeu (le moment où tous les joueurs ralentissent) et calcule le temps de jeu effectif. Les arrêts qui correspondent à une action Veo sont classés tout seuls ; pour les autres (pénalités…), tu dis en un clic ce que c'était. Ça marche avec un fichier vidéo ou un lien MP4 (liens Veo compris), pas avec YouTube. Laisse l'onglet ouvert et visible pendant l'analyse : elle peut s'arrêter et reprendre plus tard.</p>
+        <div class="ctrl">
+          <select class="btn sm" id="aStep" aria-label="Cadence"><option value="2" selected>1 image / 2 s (conseillé)</option><option value="1">1 image / s (plus précis, 2× plus long)</option><option value="3">1 image / 3 s (plus rapide)</option></select>
+          <button class="btn pri sm" id="bAuto">Lancer l'analyse</button>
+          <button class="btn sm" id="bNext" disabled>Suivante à valider</button>
+          <label class="chk"><input type="checkbox" id="autoChain" checked> enchaîner après chaque validation</label>
+        </div>
+        <div class="prog hid" id="prog"><div class="pb"><b id="pbar"></b></div><span id="pTxt" class="num"></span></div>
+        <div class="ctrl hid" id="sensRow"><label class="chk">Sensibilité <input type="range" id="sens" min="1" max="5" value="3"></label><span class="help" style="margin:0">Plus haut = plus de détections (et plus de fausses alertes). Recalcule sans relancer l'analyse.</span></div>
+        <details id="veoHelp" open><summary>Importer un match Veo (vidéo + mêlées, touches, essais)</summary>
+          <ol class="help">
+            <li>Une seule fois : glisse ce bouton dans ta barre de favoris → <a class="btn sm" href="javascript:(async()=>{const s=location.pathname.match(/matches\/([^/]+)/);if(!s){alert(`Ouvre d'abord la page d'un match sur Veo.`);return}const b=`/api/app/matches/${s[1]}/`;try{const [v,h,m]=await Promise.all([fetch(b+`videos/`).then(r=>r.json()),fetch(b+`highlights/?include_ai=true`).then(r=>r.json()),fetch(b).then(r=>r.json())]);const vv=v.find(x=>x.render_type===`standard`)||v[0]||{};const d={veo:1,t:m.title||``,u:vv.url||``,e:h.map(x=>[x.start,x.type])};const txt=JSON.stringify(d);try{await navigator.clipboard.writeText(txt);alert(`Match copié : ${d.e.length} actions. Colle-le dans l'appli (bouton Importer).`)}catch(e){prompt(`Copie ce texte puis colle-le dans l'appli :`,txt)}}catch(e){alert(`Veo n'a pas répondu. Recharge la page du match et réessaie.`)}})()">Import Veo</a></li>
+            <li>Ouvre ton match sur Veo, puis clique sur ce favori : il copie la vidéo et toutes les actions repérées par Veo.</li>
+            <li>Reviens ici, colle dans la case ci-dessous et clique sur « Importer ».</li>
+          </ol>
+          <div class="src"><input id="veoIn" placeholder="Colle ici le texte copié depuis Veo" style="flex:1 1 260px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:8px 10px;font-size:16px"><button class="btn pri" id="bVeo">Importer</button></div>
+        </details>
+      </div>
+
+      <div class="card log">
+        <div class="logh">
+          <h2>Journal des actions</h2>
+          <select id="fTeam" aria-label="Équipe"><option value="">Les deux équipes</option><option value="n">Nous</option><option value="e">Adversaire</option></select>
+          <select id="fEv" aria-label="Action"><option value="">Toutes les actions</option></select>
+          <input id="fP" type="number" min="1" max="30" placeholder="N°" aria-label="Numéro" style="width:70px;border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:6px 8px;min-height:36px">
+          <button class="btn sm" id="bUndo">Annuler la dernière</button>
+        </div>
+        <div class="tags" id="tags"></div>
+        <p class="help">Clique sur un temps pour revoir l'action (la vidéo repart 4 s avant). Filtre par action ou par numéro pour revoir, par exemple, tous les plaquages manqués du n°7.</p>
+      </div>
+    </div>
+
+    <aside class="card pad" id="pad">
+      <div class="score"><div><div class="big num" id="scN">0</div><div class="nm" id="nmN">Nous</div></div><div class="big">–</div><div><div class="big num" id="scE">0</div><div class="nm" id="nmE">Adversaire</div></div></div>
+      <div id="padRows"></div>
+      <p class="help"><b>Clavier</b> : lettre = nous, Maj + lettre = adversaire. Tape un numéro (1 à 23) juste avant la lettre pour attribuer l'action à un joueur. V = reprise du jeu, X = arrêt. Espace = lecture/pause, ← → = ±5 s (Maj : ±1 s), Retour arrière = annuler, Échap = effacer le numéro.</p>
+    </aside>
+  </div>
+</section>
+
+<!-- STATS -->
+<section class="view" id="v-sta">
+  <div class="sh">
+    <h2 id="stTitle">Stats du match</h2>
+    <div class="seg" id="segH"><button data-h="0" class="on">Match</button><button data-h="1">1re MT</button><button data-h="2">2e MT</button></div>
+    <button class="btn" id="bCopy">Copier le résumé</button>
+    <button class="btn" id="bCsv">Export CSV</button>
+  </div>
+  <div class="board">
+    <div class="card">
+      <div class="bigsc"><div><div class="big" id="bsN">0</div><div class="nm" id="bnN"></div></div><div class="big">–</div><div><div class="big" id="bsE">0</div><div class="nm" id="bnE"></div></div></div>
+      <div class="fig" id="ribbon"><svg></svg></div>
+      <div class="leg"><span><i style="background:var(--n)"></i>Possession nous</span><span><i style="background:var(--e)"></i>Possession adversaire</span><span><i style="background:var(--acc)"></i>Jeu (possession non saisie)</span><span><i style="background:var(--line)"></i>Arrêt de jeu</span><span>▲ points marqués</span></div>
+      <div id="cmp" style="margin-top:10px"></div>
+    </div>
+    <div>
+      <div class="kpis" id="kpis"></div>
+      <div class="card">
+        <h2 style="margin:0 0 6px;font-size:22px">Par joueur</h2>
+        <div class="scroll" id="players"></div>
+        <p class="help">Seules les actions saisies avec un numéro apparaissent ici. Les noms viennent de la feuille de match (bouton « Match… »).</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SAISON -->
+<section class="view" id="v-sai">
+  <div class="sh"><h2>Saison</h2>
+    <button class="btn pri" id="bNew">Nouveau match</button>
+    <button class="btn" id="bExp">Sauvegarder (JSON)</button>
+    <label class="btn" style="display:inline-flex;align-items:center">Importer…<input type="file" id="imp" accept=".json,application/json" class="hid"></label>
+  </div>
+  <div class="kpis" id="sKpis"></div>
+  <div class="card scroll" id="season"></div>
+  <p class="help">Les matchs sont enregistrés dans ce navigateur. Pense à « Sauvegarder (JSON) » régulièrement : c'est ta copie de sécurité, et le moyen de passer les données à un autre ordinateur ou à un autre membre du staff.</p>
+</section>
+</main>
+
+<div class="ov" id="ov"><div class="modal">
+  <h2>Infos du match</h2>
+  <div class="two">
+    <label class="fld">Notre équipe<input id="iN"></label>
+    <label class="fld">Adversaire<input id="iE"></label>
+    <label class="fld">Date<input id="iD" type="date"></label>
+    <label class="fld">Compétition<input id="iC" placeholder="Régionale 1, amical…"></label>
+    <label class="fld">Lieu<select id="iH"><option value="dom">Domicile</option><option value="ext">Extérieur</option></select></label>
+    <label class="fld">Couleurs (nous / eux)<span style="display:flex;gap:8px"><input id="iCn" type="color" style="height:42px;flex:1"><input id="iCe" type="color" style="height:42px;flex:1"></span></label>
+  </div>
+  <label class="fld">Feuille de match (un joueur par ligne : numéro puis prénom)<textarea id="iR" rows="7" placeholder="1 Mattin&#10;2 Ellande&#10;3 Hugo"></textarea></label>
+  <div style="display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap">
+    <button class="btn" id="mDel">Supprimer ce match</button>
+    <button class="btn" id="mCancel">Fermer</button>
+    <button class="btn pri" id="mSave">Enregistrer</button>
+  </div>
+</div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+{
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const EV=[
+ {g:'Déroulement',id:'poss',k:'a',l:'Ballon à…'},
+ {g:'Déroulement',id:'dead',k:'x',l:'Arrêt de jeu',solo:1},
+ {g:'Déroulement',id:'live',k:'v',l:'Reprise du jeu',solo:1},
+ {g:'Déroulement',id:'half',k:'h',l:'Fin de 1re mi-temps',solo:1},
+ {g:'Auto',id:'a_sc',l:'Mêlée',hide:1,solo:1},
+ {g:'Auto',id:'a_lo',l:'Touche',hide:1,solo:1},
+ {g:'Auto',id:'a_pen',l:'Pénalité sifflée',hide:1,solo:1},
+ {g:'Auto',id:'a_try',l:'Essai (Veo)',hide:1,solo:1},
+ {g:'Auto',id:'a_con',l:'Transformation (Veo)',hide:1,solo:1},
+ {g:'Défense',id:'tk',k:'p',l:'Plaquage réussi'},
+ {g:'Défense',id:'tkm',k:'m',l:'Plaquage manqué'},
+ {g:'Défense',id:'to',k:'g',l:'Grattage / turnover gagné'},
+ {g:'Attaque',id:'rk',k:'r',l:'Ruck conservé'},
+ {g:'Attaque',id:'brk',k:'b',l:'Franchissement'},
+ {g:'Attaque',id:'z22',k:'z',l:'Entrée dans les 22'},
+ {g:'Attaque',id:'kick',k:'k',l:'Coup de pied de jeu'},
+ {g:'Conquête',id:'scw',k:'s',l:'Mêlée gagnée (sa balle)'},
+ {g:'Conquête',id:'scl',k:'d',l:'Mêlée perdue (sa balle)'},
+ {g:'Conquête',id:'low',k:'l',l:'Touche gagnée (son lancer)'},
+ {g:'Conquête',id:'lol',k:'o',l:'Touche perdue (son lancer)'},
+ {g:'Discipline',id:'fwd',k:'e',l:'En-avant / faute de main'},
+ {g:'Discipline',id:'pen',k:'f',l:'Pénalité concédée'},
+ {g:'Discipline',id:'yc',k:'j',l:'Carton jaune'},
+ {g:'Points',id:'try',k:'i',l:'Essai',pts:5},
+ {g:'Points',id:'con',k:'c',l:'Transformation réussie',pts:2},
+ {g:'Points',id:'conx',k:'n',l:'Transformation ratée'},
+ {g:'Points',id:'pg',k:'u',l:'Pénalité réussie',pts:3},
+ {g:'Points',id:'pgx',k:'y',l:'Pénalité ratée'},
+ {g:'Points',id:'drop',k:'',l:'Drop réussi',pts:3}
+];
+const EVM=Object.fromEntries(EV.map(e=>[e.id,e]));
+const KEY=Object.fromEntries(EV.filter(e=>e.k).map(e=>[e.k,e.id]));
+const KEYDB='m16-analyse-video-v1';
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+const fmt=t=>{t=Math.max(0,Math.floor(t||0));const h=Math.floor(t/3600),m=Math.floor(t%3600/60),s=t%60;return (h?h+':':'')+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0')};
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pct=(a,b)=>b?Math.round(100*a/b)+' %':'–';
+
+function newMatch(){return {id:uid(),nN:'Seignanx XV',nE:'Adversaire',date:new Date().toISOString().slice(0,10),comp:'',lieu:'dom',cN:'#1f5fbf',cE:'#c8352b',roster:'',src:null,tags:[]}}
+let db;
+try{db=JSON.parse(localStorage.getItem(KEYDB))}catch(e){}
+if(!db||!Array.isArray(db.matches)||!db.matches.length){const m=newMatch();db={matches:[m],cur:m.id}}
+const M=()=>db.matches.find(m=>m.id===db.cur)||db.matches[0];
+const save=()=>{try{localStorage.setItem(KEYDB,JSON.stringify(db))}catch(e){toast('Enregistrement impossible dans ce navigateur')}};
+function toast(t){const el=$('#toast');el.textContent=t;el.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>el.classList.remove('on'),1800)}
+
+/* ---------- lecteur ---------- */
+let P=null,ytReady=null;
+function ytId(u){const m=u.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/);return m?m[1]:null}
+function loadYTApi(){if(ytReady)return ytReady;ytReady=new Promise(res=>{window.onYouTubeIframeAPIReady=res;const s=document.createElement('script');s.src='https://www.youtube.com/iframe_api';document.head.appendChild(s)});return ytReady}
+function clearVid(){$('#vid').innerHTML='';P=null}
+async function loadSource(src){
+  clearVid();
+  if(!src){$('#vid').innerHTML='<div class="empty">Colle un lien YouTube ou MP4 ci-dessous,<br>ou ouvre une vidéo enregistrée sur ton ordinateur.</div>';return}
+  const id=src.type==='yt'?src.v:null;
+  if(id){
+    $('#vid').innerHTML='<div id="yt"></div>';
+    await loadYTApi();
+    const y=new YT.Player('yt',{videoId:id,playerVars:{playsinline:1,rel:0,modestbranding:1},events:{onReady:()=>y.setPlaybackRate(+$('#rate').value)}});
+    P={time:()=>y.getCurrentTime?y.getCurrentTime():0,seek:t=>y.seekTo(Math.max(0,t),true),play:()=>y.playVideo(),pause:()=>y.pauseVideo(),playing:()=>y.getPlayerState&&y.getPlayerState()===1,rate:r=>y.setPlaybackRate&&y.setPlaybackRate(r),dur:()=>y.getDuration?y.getDuration():0};
+  }else{
+    const v=document.createElement('video');v.controls=true;v.playsInline=true;v.preload='metadata';
+    v.src=src.type==='file'?src.blob:src.v;
+    v.onerror=()=>toast('Vidéo illisible : vérifie le lien ou le format (MP4 conseillé)');
+    $('#vid').appendChild(v);v.playbackRate=+$('#rate').value;
+    P={time:()=>v.currentTime,seek:t=>{v.currentTime=Math.max(0,t)},play:()=>v.play(),pause:()=>v.pause(),playing:()=>!v.paused,rate:r=>{v.playbackRate=r},dur:()=>v.duration||0};
+  }
+}
+function fromUrl(u){u=u.trim();if(!u)return null;const id=ytId(u);return id?{type:'yt',v:id,url:u}:{type:'url',v:u,url:u}}
+$('#bLoad').onclick=()=>{if(/veo\.co\/matches/.test($('#url').value)){$('#veoHelp').open=true;$('#veoHelp').scrollIntoView({behavior:'smooth',block:'center'});return toast('C\'est la page du match : il faut le lien de la vidéo (voir l\'aide Veo)')}const s=fromUrl($('#url').value);if(!s)return toast('Colle d\'abord un lien');M().src=s;save();loadSource(s)};
+$('#url').addEventListener('keydown',e=>{if(e.key==='Enter')$('#bLoad').click()});
+$('#file').onchange=e=>{const f=e.target.files[0];if(!f)return;const s={type:'file',v:f.name,blob:URL.createObjectURL(f)};curBlob=s.blob;M().src={type:'file',v:f.name};save();loadSource(s);$('#url').value='';toast('Vidéo ouverte : '+f.name)};
+$('#bPlay').onclick=()=>{if(!P)return;P.playing()?P.pause():P.play()};
+$$('[data-sk]').forEach(b=>b.onclick=()=>P&&P.seek(P.time()+ +b.dataset.sk));
+$('#rate').onchange=e=>P&&P.rate(+e.target.value);
+setInterval(()=>{const t=P?P.time():0;$('#clock').textContent=fmt(t);$('#halfLbl').textContent=halfOf(M(),t)===2?'2e MT':'1re MT';$('#bPlay').textContent=P&&P.playing()?'Pause':'Lecture'},250);
+
+/* ---------- saisie ---------- */
+let pending='',pendT=0;
+function setPending(d){if(Date.now()-pendT>2500)pending='';pending=(pending+d).slice(-2);pendT=Date.now();showPend()}
+function showPend(){const el=$('#pend');el.classList.toggle('on',!!pending);el.textContent=pending?'N° '+pending+' '+(nameOf(M(),+pending)||''):''}
+function addTag(e,team,btn){
+  const m=M(),t=P?P.time():0;
+  const tag={id:uid(),t:Math.round(t*10)/10,e,team:EVM[e].solo?null:team};
+  if(pending&&team==='n'&&!EVM[e].solo&&Date.now()-pendT<6000)tag.p=+pending;
+  pending='';showPend();
+  m.tags.push(tag);save();renderAll();
+  if(btn){btn.classList.remove('flash');void btn.offsetWidth;btn.classList.add('flash')}
+  toast(fmt(t)+' · '+label(tag));
+}
+function label(tg){const e=EVM[tg.e];if(!e)return tg.e;if(tg.e==='poss')return 'Ballon à '+(tg.team==='n'?M().nN:M().nE);return e.l}
+function undo(){const m=M();if(!m.tags.length)return;m.tags.pop();save();renderAll();toast('Dernière action annulée')}
+$('#bUndo').onclick=undo;
+
+function renderPad(){
+  let g='',h='';
+  EV.filter(e=>!e.hide).forEach(e=>{
+    if(e.g!==g){g=e.g;h+='<h2>'+g+'</h2>'}
+    const k=e.k?'<kbd>'+e.k.toUpperCase()+'</kbd>':'';
+    h+='<div class="row"><span>'+e.l+k+'</span>'+(e.solo?'<button class="tb x" data-e="'+e.id+'">Marquer</button>':'<button class="tb n" data-e="'+e.id+'" data-t="n">Nous</button><button class="tb e" data-e="'+e.id+'" data-t="e">Eux</button>')+'</div>';
+  });
+  $('#padRows').innerHTML=h;
+  $$('#padRows .tb').forEach(b=>b.onclick=()=>addTag(b.dataset.e,b.dataset.t||null,b));
+  $('#fEv').innerHTML='<option value="">Toutes les actions</option><option value="__auto">À valider (analyse auto)</option>'+EV.map(e=>'<option value="'+e.id+'">'+e.l+'</option>').join('');
+}
+
+document.addEventListener('keydown',e=>{
+  if(e.target.closest('input,textarea,select')||$('#ov').classList.contains('on'))return;
+  if(e.ctrlKey||e.metaKey||e.altKey){if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo()}return}
+  const dg=e.code.match(/^(?:Digit|Numpad)(\d)$/);
+  if(dg){e.preventDefault();setPending(dg[1]);return}
+  if(e.code==='Space'){e.preventDefault();$('#bPlay').click();return}
+  if(e.key==='ArrowLeft'||e.key==='ArrowRight'){e.preventDefault();if(P)P.seek(P.time()+(e.key==='ArrowLeft'?-1:1)*(e.shiftKey?1:5));return}
+  if(e.key==='Backspace'){e.preventDefault();undo();return}
+  if(e.key==='Escape'){pending='';showPend();return}
+  const id=KEY[e.key.toLowerCase()];
+  if(id){e.preventDefault();const team=e.shiftKey?'e':'n';addTag(id,team,$('#padRows .tb[data-e="'+id+'"]'+(EVM[id].solo?'':'[data-t="'+team+'"]')))}
+});
+
+/* ---------- calculs ---------- */
+function halfOf(m,t){const h=m.tags.find(x=>x.e==='half');return h&&t>=h.t?2:1}
+function roster(m){const r={};(m.roster||'').split('\n').forEach(l=>{const x=l.trim().match(/^(\d{1,2})[\s.\-:]+(.+)$/);if(x)r[+x[1]]=x[2].trim()});return r}
+function nameOf(m,n){return roster(m)[n]||''}
+function score(m,half){const s={n:0,e:0};m.tags.forEach(t=>{const p=EVM[t.e]&&EVM[t.e].pts;if(p&&t.team&&(!half||halfOf(m,t.t)===half))s[t.team]+=p});return s}
+function segments(m){
+  const ts=[...m.tags].sort((a,b)=>a.t-b.t),aF=m.autoF&&m.autoF.length?m.autoF:null;if(!ts.length&&!aF)return {segs:[],end:0};
+  const end=Math.max(ts.length?ts[ts.length-1].t:0,P&&M()===m?P.time():0,aF?aF[aF.length-1][0]:0);
+  const mk=ts.filter(t=>['poss','dead','live','half'].includes(t.e));
+  const segs=[];let st=aF?'live':null,from=aF?aF[0][0]:0;
+  mk.forEach(t=>{if(st&&t.t>from)segs.push({a:from,b:t.t,s:st});st=t.e==='poss'?t.team:t.e==='dead'?'dead':t.e==='live'?'live':null;from=t.t});
+  if(st&&end>from)segs.push({a:from,b:end,s:st});
+  return {segs,end};
+}
+function stats(m,half){
+  const tg=m.tags.filter(t=>!half||halfOf(m,t.t)===half);
+  const c=(team,id)=>tg.filter(t=>t.team===team&&t.e===id).length;
+  const {segs}=segments(m);const pos={n:0,e:0,dead:0,live:0};
+  segs.forEach(s=>{if(!half||halfOf(m,s.a)===half)pos[s.s]+=s.b-s.a});
+  const sc=score(m,half),o={n:'e',e:'n'},R={};
+  ['n','e'].forEach(T=>{const tk=c(T,'tk'),tkm=c(T,'tkm'),rk=c(T,'rk'),lost=c(o[T],'to'),
+    kicks=c(T,'con')+c(T,'pg'),kTot=kicks+c(T,'conx')+c(T,'pgx');
+    R[T]={pts:sc[T],pos:pos[T],tk,tkm,to:c(T,'to'),rk,rkTot:rk+lost,brk:c(T,'brk'),z22:c(T,'z22'),kick:c(T,'kick'),
+      scw:c(T,'scw'),scT:c(T,'scw')+c(T,'scl'),low:c(T,'low'),loT:c(T,'low')+c(T,'lol'),pen:c(T,'pen'),fwd:c(T,'fwd'),yc:c(T,'yc'),
+      tries:c(T,'try'),kicks,kTot}});
+  R.eff=pos.n+pos.e+pos.live;R.pk=pos.n+pos.e;R.pend=tg.filter(t=>t.auto).length;return R;
+}
+
+/* ---------- rendu saisie ---------- */
+function renderHead(){
+  const m=M();
+  $('#mInfo').textContent=m.nN+' – '+m.nE+' · '+new Date(m.date+'T12:00').toLocaleDateString('fr-FR',{day:'numeric',month:'short',year:'numeric'})+(m.comp?' · '+m.comp:'');
+  document.documentElement.style.setProperty('--n',m.cN);document.documentElement.style.setProperty('--e',m.cE);
+  const s=score(m);$('#scN').textContent=s.n;$('#scE').textContent=s.e;$('#nmN').textContent=m.nN;$('#nmE').textContent=m.nE;
+}
+const VAL={dead:[['a_sc','','Mêlée'],['a_lo','','Touche'],['a_pen','','Pénalité'],['ok','','Autre arrêt']],
+ a_sc:[['scw','n','Nous gagne'],['scl','n','Nous perd'],['scw','e','Eux gagne'],['scl','e','Eux perd']],
+ a_lo:[['low','n','Nous gagne'],['lol','n','Nous perd'],['low','e','Eux gagne'],['lol','e','Eux perd']],
+ a_pen:[['pen','n','Contre nous'],['pen','e','Contre eux']],
+ a_try:[['try','n','Essai nous'],['try','e','Essai eux']],
+ a_con:[['con','n','Réussie nous'],['conx','n','Ratée nous'],['con','e','Réussie eux'],['conx','e','Ratée eux']]};
+const HINT={dead:'Qu\'est-ce qui a arrêté le jeu ?',a_sc:'Sur l\'introduction de qui, et qui gagne ?',a_lo:'Sur le lancer de qui, et qui gagne ?',a_pen:'Pénalité sifflée contre qui ?',a_try:'Essai de qui ?',a_con:'De qui, et réussie ?'};
+function renderTags(){
+  const m=M(),ft=$('#fTeam').value,fe=$('#fEv').value,fp=+$('#fP').value;
+  const list=[...m.tags].filter(t=>(!ft||t.team===ft)&&(!fe||(fe==='__auto'?t.auto:t.e===fe))&&(!fp||t.p===fp)).sort((a,b)=>fe==='__auto'?a.t-b.t:b.t-a.t);
+  const np=m.tags.filter(t=>t.auto).length;$('#nPend').textContent=np?np+' à valider':'';$('#bNext').disabled=!np;
+  $('#tags').innerHTML=list.length?list.map(t=>'<div class="tag'+(t.auto?' au':'')+'"><button class="t" data-s="'+t.t+'">'+fmt(t.t)+'</button><span class="dot" style="background:'+(t.team==='n'?'var(--n)':t.team==='e'?'var(--e)':'var(--mute)')+'"></span><span>'+esc(label(t))+(t.auto?' <span class="badge">à valider</span> <span class="note">'+(HINT[t.e]||'')+'</span>':'')+(t.note?' <span class="note">· '+esc(t.note)+'</span>':'')+
+    (t.auto&&VAL[t.e]?'<span class="vals">'+VAL[t.e].map(v=>'<button class="vb '+(v[1]||'ok')+'" data-v="'+t.id+'|'+v[0]+'|'+v[1]+'">'+v[2]+'</button>').join('')+'</span>':'')+
+    '</span><span class="p">'+(t.p?'N°'+t.p+' '+esc(nameOf(m,t.p)):'')+'</span><button class="del" data-d="'+t.id+'" aria-label="Supprimer">×</button></div>').join(''):'<p class="help" style="padding:10px 0">Aucune action pour l\'instant. Lance la vidéo et utilise le pupitre ou le clavier, ou lance l\'analyse automatique.</p>';
+}
+function nextPending(){const m=M(),now=P?P.time():0,pend=m.tags.filter(t=>t.auto).sort((a,b)=>a.t-b.t);if(!pend.length)return;
+  const nx=pend.find(t=>t.t>now+1)||pend[0];if(P){P.seek(nx.t-4);P.play()}toast(fmt(nx.t)+' · '+label(nx)+' : à valider')}
+$('#tags').addEventListener('click',e=>{
+  const s=e.target.closest('[data-s]'),d=e.target.closest('[data-d]'),v=e.target.closest('[data-v]');
+  if(s&&P){P.seek(+s.dataset.s-4);P.play()}
+  if(d){const m=M(),x=m.tags.find(t=>t.id===d.dataset.d);m.tags=m.tags.filter(t=>t.id!==d.dataset.d&&!(x&&x.pair&&t.id===x.pair));save();renderAll()}
+  if(v){const m=M(),[id,ev,team]=v.dataset.v.split('|'),t=m.tags.find(x=>x.id===id);if(!t)return;
+    delete t.auto;
+    if(ev.startsWith('a_')){m.tags.push({id:uid(),t:+(t.t+.1).toFixed(1),e:ev,team:null,auto:1});save();renderAll();return}
+    if(ev!=='ok'){t.e=ev;t.team=team||null}
+    save();renderAll();if($('#autoChain').checked)nextPending()}
+});
+['#fTeam','#fEv','#fP'].forEach(s=>$(s).addEventListener('input',renderTags));
+
+/* ---------- rendu stats ---------- */
+let H=0;
+$$('#segH button').forEach(b=>b.onclick=()=>{H=+b.dataset.h;$$('#segH button').forEach(x=>x.classList.toggle('on',x===b));renderStats()});
+function cmpRow(l,a,b,va,vb,sub){const t=a+b,wa=t?100*a/t:0,wb=t?100*b/t:0;return '<div class="cmp"><span class="v">'+va+'</span><span class="lb">'+l+(sub?'<br><span class="sub">'+sub+'</span>':'')+'</span><span class="v r">'+vb+'</span><div class="bar"><b style="width:'+wa+'%"></b><s style="width:'+wb+'%"></s></div></div>'}
+function renderStats(){
+  const m=M(),S=stats(m,H),n=S.n,e=S.e;
+  $('#stTitle').textContent=m.nN+' – '+m.nE;
+  $('#bsN').textContent=n.pts;$('#bsE').textContent=e.pts;$('#bnN').textContent=m.nN;$('#bnE').textContent=m.nE;
+  const pp=x=>S.pk?Math.round(100*x/S.pk):0;
+  $('#cmp').innerHTML=[
+    cmpRow('Possession',n.pos,e.pos,pp(n.pos)+' %',pp(e.pos)+' %',fmt(n.pos)+' / '+fmt(e.pos)),
+    cmpRow('Plaquages réussis',n.tk,e.tk,n.tk,e.tk,'réussite '+pct(n.tk,n.tk+n.tkm)+' / '+pct(e.tk,e.tk+e.tkm)),
+    cmpRow('Plaquages manqués',n.tkm,e.tkm,n.tkm,e.tkm),
+    cmpRow('Ballons grattés',n.to,e.to,n.to,e.to),
+    cmpRow('Rucks conservés',n.rk,e.rk,pct(n.rk,n.rkTot),pct(e.rk,e.rkTot),n.rk+'/'+n.rkTot+' · '+e.rk+'/'+e.rkTot),
+    cmpRow('Franchissements',n.brk,e.brk,n.brk,e.brk),
+    cmpRow('Entrées dans les 22',n.z22,e.z22,n.z22,e.z22,'points par entrée '+(n.z22?(n.pts/n.z22).toFixed(1):'–')+' / '+(e.z22?(e.pts/e.z22).toFixed(1):'–')),
+    cmpRow('Coups de pied de jeu',n.kick,e.kick,n.kick,e.kick),
+    cmpRow('Mêlées gagnées sur sa balle',n.scw,e.scw,n.scw+'/'+n.scT,e.scw+'/'+e.scT),
+    cmpRow('Touches gagnées sur son lancer',n.low,e.low,n.low+'/'+n.loT,e.low+'/'+e.loT),
+    cmpRow('Pénalités concédées',n.pen,e.pen,n.pen,e.pen),
+    cmpRow('En-avants / fautes de main',n.fwd,e.fwd,n.fwd,e.fwd),
+    cmpRow('Cartons jaunes',n.yc,e.yc,n.yc,e.yc),
+    cmpRow('Réussite au pied',n.kicks,e.kicks,n.kicks+'/'+n.kTot,e.kicks+'/'+e.kTot)
+  ].join('');
+  const k=(v,l,s)=>'<div class="kpi"><div class="big">'+v+'</div><span class="sub">'+l+(s?' · '+s:'')+'</span></div>';
+  $('#kpis').innerHTML=k(fmt(S.eff),'Temps de jeu effectif')+k(pct(n.tk,n.tk+n.tkm),'Réussite au plaquage',n.tkm+' manqués')+k(pp(n.pos)+' %','Possession')+k(n.pen,'Pénalités concédées',n.yc?n.yc+' carton(s)':'')+k(n.tries,'Essais marqués',e.tries+' encaissés');
+  // joueurs
+  const pl={};m.tags.filter(t=>t.team==='n'&&t.p&&(!H||halfOf(m,t.t)===H)).forEach(t=>{(pl[t.p]=pl[t.p]||{})[t.e]=(pl[t.p][t.e]||0)+1});
+  const nums=Object.keys(pl).map(Number).sort((a,b)=>a-b);
+  const g=(o,id)=>o[id]||0;
+  $('#players').innerHTML=nums.length?'<table><thead><tr><th>Joueur</th><th>Plaq.</th><th>Manq.</th><th>%</th><th>Gratt.</th><th>Franch.</th><th>Essais</th><th>En-av.</th><th>Pén.</th></tr></thead><tbody>'+nums.map(nu=>{const o=pl[nu];return '<tr><td class="l">'+nu+' '+esc(nameOf(m,nu))+'</td><td>'+g(o,'tk')+'</td><td>'+g(o,'tkm')+'</td><td>'+pct(g(o,'tk'),g(o,'tk')+g(o,'tkm'))+'</td><td>'+g(o,'to')+'</td><td>'+g(o,'brk')+'</td><td>'+g(o,'try')+'</td><td>'+g(o,'fwd')+'</td><td>'+g(o,'pen')+'</td></tr>'}).join('')+'</tbody></table>':'<p class="help">Pas encore d\'action attribuée à un joueur.</p>';
+  drawRibbon();
+}
+function drawRibbon(){
+  const m=M(),s=$('#ribbon svg'),W=s.clientWidth,Hh=s.clientHeight;if(!W)return;
+  const {segs,end}=segments(m);if(!end){s.innerHTML='<text x="0" y="50" fill="currentColor" opacity=".6" font-size="13">Marque la possession (touche A) pour voir le ruban du match.</text>';return}
+  const x=t=>t/end*W,col={n:'var(--n)',e:'var(--e)',dead:'var(--line)',live:'var(--acc)'};
+  let h='<rect x="0" y="34" width="'+W+'" height="26" fill="var(--line)" opacity=".5" rx="4"/>';
+  segs.forEach(g=>h+='<rect x="'+x(g.a)+'" y="34" width="'+Math.max(.5,x(g.b)-x(g.a))+'" height="26" fill="'+col[g.s]+'"/>');
+  const hf=m.tags.find(t=>t.e==='half');if(hf)h+='<line x1="'+x(hf.t)+'" x2="'+x(hf.t)+'" y1="26" y2="68" stroke="currentColor" stroke-width="2"/><text x="'+x(hf.t)+'" y="84" text-anchor="middle" font-size="12" fill="currentColor" opacity=".7">MT</text>';
+  m.tags.filter(t=>EVM[t.e]&&EVM[t.e].pts&&t.team).forEach(t=>{const X=x(t.t);h+='<path d="M'+(X-6)+' 28 L'+X+' 18 L'+(X+6)+' 28Z" fill="'+col[t.team]+'"><title>'+fmt(t.t)+' '+esc(EVM[t.e].l)+'</title></path>'});
+  h+='<text x="0" y="84" font-size="12" fill="currentColor" opacity=".7">0:00</text><text x="'+W+'" y="84" text-anchor="end" font-size="12" fill="currentColor" opacity=".7">'+fmt(end)+'</text>';
+  s.innerHTML=h;
+}
+new ResizeObserver(drawRibbon).observe($('#ribbon'));
+
+/* ---------- saison ---------- */
+function renderSeason(){
+  const rows=[...db.matches].sort((a,b)=>(b.date||'').localeCompare(a.date||''));
+  const all=rows.map(m=>({m,S:stats(m,0)}));
+  const played=all.filter(r=>r.m.tags.length);
+  const avg=f=>played.length?played.reduce((a,r)=>a+f(r.S),0)/played.length:0;
+  const w=played.filter(r=>r.S.n.pts>r.S.e.pts).length,d=played.filter(r=>r.S.n.pts===r.S.e.pts).length;
+  const k=(v,l)=>'<div class="kpi"><div class="big">'+v+'</div><span class="sub">'+l+'</span></div>';
+  const tkS=played.reduce((a,r)=>a+r.S.n.tk,0),tkmS=played.reduce((a,r)=>a+r.S.n.tkm,0);
+  $('#sKpis').innerHTML=k(played.length,'Matchs analysés')+k(w+'-'+d+'-'+(played.length-w-d),'Victoires-nuls-défaites')+k(Math.round(avg(S=>S.n.pts))+' / '+Math.round(avg(S=>S.e.pts)),'Points marqués / encaissés par match')+k(pct(tkS,tkS+tkmS),'Réussite au plaquage')+k(avg(S=>S.n.pen).toFixed(1),'Pénalités concédées par match');
+  $('#season').innerHTML='<table><thead><tr><th>Date</th><th class="l">Adversaire</th><th>Score</th><th>Poss.</th><th>Plaq. %</th><th>Gratt.</th><th>Pén.</th><th>Essais</th><th></th></tr></thead><tbody>'+all.map(({m,S})=>'<tr><td class="l">'+new Date(m.date+'T12:00').toLocaleDateString('fr-FR')+'</td><td class="l">'+esc(m.nE)+(m.lieu==='ext'?' (ext.)':'')+'</td><td>'+S.n.pts+' – '+S.e.pts+'</td><td>'+(S.pk?Math.round(100*S.n.pos/S.pk)+' %':'–')+'</td><td>'+pct(S.n.tk,S.n.tk+S.n.tkm)+'</td><td>'+S.n.to+'</td><td>'+S.n.pen+'</td><td>'+S.n.tries+'</td><td><button class="btn sm" data-o="'+m.id+'">'+(m.id===db.cur?'Ouvert':'Ouvrir')+'</button></td></tr>').join('')+'</tbody></table>';
+}
+$('#season').addEventListener('click',e=>{const b=e.target.closest('[data-o]');if(!b)return;db.cur=b.dataset.o;save();openMatch();go('ana')});
+$('#bNew').onclick=()=>{const m=newMatch();db.matches.push(m);db.cur=m.id;save();openMatch();editMatch()};
+
+/* ---------- fiche match ---------- */
+let delArm=false;
+function editMatch(){const m=M();$('#iN').value=m.nN;$('#iE').value=m.nE;$('#iD').value=m.date;$('#iC').value=m.comp;$('#iH').value=m.lieu;$('#iCn').value=m.cN;$('#iCe').value=m.cE;$('#iR').value=m.roster;delArm=false;$('#mDel').textContent='Supprimer ce match';$('#ov').classList.add('on');$('#iE').focus()}
+$('#bEdit').onclick=editMatch;
+$('#mCancel').onclick=()=>$('#ov').classList.remove('on');
+$('#mSave').onclick=()=>{const m=M();m.nN=$('#iN').value.trim()||'Nous';m.nE=$('#iE').value.trim()||'Adversaire';m.date=$('#iD').value||m.date;m.comp=$('#iC').value.trim();m.lieu=$('#iH').value;m.cN=$('#iCn').value;m.cE=$('#iCe').value;m.roster=$('#iR').value;save();$('#ov').classList.remove('on');renderAll()};
+$('#mDel').onclick=()=>{if(!delArm){delArm=true;$('#mDel').textContent='Confirmer la suppression';return}
+  db.matches=db.matches.filter(x=>x.id!==db.cur);if(!db.matches.length)db.matches.push(newMatch());db.cur=db.matches[0].id;save();$('#ov').classList.remove('on');openMatch()};
+
+/* ---------- export ---------- */
+function download(name,text,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type}));a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+const slug=s=>s.normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^\w]+/g,'-').toLowerCase();
+$('#bExp').onclick=()=>download('analyse-m16-'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(db,null,1),'application/json');
+$('#imp').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{try{const d=JSON.parse(t);const list=Array.isArray(d.matches)?d.matches:[d];let n=0;list.forEach(m=>{if(m&&Array.isArray(m.tags)){const i=db.matches.findIndex(x=>x.id===m.id);i>=0?db.matches[i]=m:db.matches.push(m);n++}});save();renderAll();toast(n+' match(s) importé(s)')}catch(err){toast('Fichier non reconnu')}});e.target.value=''};
+$('#bCsv').onclick=()=>{const m=M();const rows=[['temps','mi-temps','equipe','action','numero','joueur']].concat([...m.tags].sort((a,b)=>a.t-b.t).map(t=>[fmt(t.t),halfOf(m,t.t),t.team==='n'?m.nN:t.team==='e'?m.nE:'',label(t),t.p||'',nameOf(m,t.p)]));
+  download(slug(m.nN+'-'+m.nE+'-'+m.date)+'.csv','﻿'+rows.map(r=>r.map(c=>'"'+String(c).replace(/"/g,'""')+'"').join(';')).join('\n'),'text/csv')};
+$('#bCopy').onclick=async()=>{const m=M(),S=stats(m,H),n=S.n,e=S.e,pp=x=>S.pk?Math.round(100*x/S.pk):0;
+  const t=m.nN+' '+n.pts+' – '+e.pts+' '+m.nE+(H?' ('+H+(H===1?'re':'e')+' MT)':'')+'\n'+
+  'Possession : '+pp(n.pos)+' % (jeu effectif '+fmt(S.eff)+')\n'+
+  'Plaquages : '+n.tk+' réussis, '+n.tkm+' manqués ('+pct(n.tk,n.tk+n.tkm)+')\n'+
+  'Rucks conservés : '+pct(n.rk,n.rkTot)+' · Ballons grattés : '+n.to+'\n'+
+  'Mêlées : '+n.scw+'/'+n.scT+' · Touches : '+n.low+'/'+n.loT+'\n'+
+  'Franchissements : '+n.brk+' · Entrées 22 : '+n.z22+'\n'+
+  'Pénalités concédées : '+n.pen+' (adv. '+e.pen+') · En-avants : '+n.fwd+(n.yc?' · Cartons : '+n.yc:'');
+  try{await navigator.clipboard.writeText(t);toast('Résumé copié, prêt à coller')}catch(err){toast('Copie refusée par le navigateur')}};
+
+/* ---------- analyse automatique ---------- */
+const ORT='https://cdn.jsdelivr.net/npm/onnxruntime-web@1.20.1/dist/';
+const MODELS=['yolov8n.onnx','https://cdn.jsdelivr.net/gh/Hyuto/yolov8-onnxruntime-web@master/public/model/yolov8n.onnx'];
+const A={W:1280,H:720,S:640,sess:null,ep:'',run:false};
+A.K=A.S/A.H;
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=src;s.onload=res;s.onerror=()=>rej(new Error('script'));document.head.appendChild(s)})}
+async function aLoad(status){
+  if(A.sess)return;
+  if(!window.ort){status('Chargement du moteur d\'analyse…');await loadScript(ORT+'ort.webgpu.min.js')}
+  ort.env.wasm.wasmPaths=ORT;
+  const eps=navigator.gpu?['webgpu','wasm']:['wasm'];
+  for(const u of MODELS)for(const ep of eps){
+    try{status('Chargement du modèle de détection…');A.sess=await ort.InferenceSession.create(u,{executionProviders:[ep],graphOptimizationLevel:'all'});A.ep=ep;return}catch(e){console.warn(u,ep,e)}
+  }
+  throw new Error('Modèle de détection introuvable');
+}
+const aCv=document.createElement('canvas');aCv.width=A.W;aCv.height=A.H;const aCx=aCv.getContext('2d',{willReadFrequently:true});
+const aTv=document.createElement('canvas');aTv.width=A.S;aTv.height=A.S;const aTx=aTv.getContext('2d',{willReadFrequently:true});
+const aIn=new Float32Array(3*A.S*A.S);
+function iou(a,b){const x1=Math.max(a.x1,b.x1),y1=Math.max(a.y1,b.y1),x2=Math.min(a.x2,b.x2),y2=Math.min(a.y2,b.y2);const i=Math.max(0,x2-x1)*Math.max(0,y2-y1);return i/((a.x2-a.x1)*(a.y2-a.y1)+(b.x2-b.x1)*(b.y2-b.y1)-i)}
+function nms(bx,th){bx.sort((a,b)=>b.s-a.s);const k=[];for(const b of bx)if(k.every(o=>iou(o,b)<th))k.push(b);return k}
+async function aTile(sx){
+  const S=A.S,K=A.K;aTx.fillStyle='#727272';aTx.fillRect(0,0,S,S);aTx.drawImage(aCv,sx,0,S,A.H,0,0,Math.round(S*K),S);
+  const d=aTx.getImageData(0,0,S,S).data,n=S*S;
+  for(let i=0;i<n;i++){aIn[i]=d[i*4]/255;aIn[i+n]=d[i*4+1]/255;aIn[i+2*n]=d[i*4+2]/255}
+  const o=await A.sess.run({[A.sess.inputNames[0]]:new ort.Tensor('float32',aIn,[1,3,S,S])});
+  const r=o[A.sess.outputNames[0]].data,N=r.length/84,bx=[];
+  for(let i=0;i<N;i++){const s=r[4*N+i];if(s<.28)continue;const c=r[i]/K+sx,cy=r[N+i]/K,w=r[2*N+i]/K,h=r[3*N+i]/K;bx.push({x1:c-w/2,y1:cy-h/2,x2:c+w/2,y2:cy+h/2,s})}
+  return bx;
+}
+function onGrass(d,x,y){const W=A.W,H=A.H;x=Math.round(x);y=Math.round(y);let g=0,n=0;for(let dy=2;dy<8;dy+=2)for(let dx=-4;dx<=4;dx+=4){const X=Math.min(W-1,Math.max(0,x+dx)),Y=Math.min(H-1,y+dy),i=(Y*W+X)*4;n++;if(d[i+1]>d[i]+6&&d[i+1]>d[i+2]+6)g++}return g/n>=.5}
+async function aFrame(v){
+  aCx.drawImage(v,0,0,A.W,A.H);
+  const bx=nms([...await aTile(0),...await aTile(A.W-A.S)],.45);
+  const d=aCx.getImageData(0,0,A.W,A.H).data,out=[];
+  for(const b of bx){const h=b.y2-b.y1,w=b.x2-b.x1;if(h<9||h>A.H*.5||w>h*1.3)continue;if(!onGrass(d,(b.x1+b.x2)/2,b.y2))continue;out.push([(b.x1+b.x2)/2,b.y2,h])}
+  return out;
+}
+const med=a=>{if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);return s[s.length>>1]};
+/* une ligne de signaux par image : [t, joueurs vus, vitesse résiduelle en hauteurs de joueur / s] */
+function aFeat(t,b,prev,dt){
+  let spd=-1;
+  if(prev&&prev.length>3&&b.length>3){const ds=[];for(const q of b){let bd=1e9,best=null;for(const r of prev){const d=Math.hypot(q[0]-r[0],q[1]-r[1]);if(d<bd){bd=d;best=r}}if(bd<q[2]*3)ds.push([q[0]-best[0],q[1]-best[1],q[2]])}
+    if(ds.length>3){const mx=med(ds.map(d=>d[0])),my=med(ds.map(d=>d[1]));spd=med(ds.map(d=>Math.hypot(d[0]-mx,d[1]-my)/d[2]))/dt}}
+  return [t,b.length,+spd.toFixed(3)];
+}
+/* arrêts de jeu : les joueurs ralentissent tous en même temps (réglé sur un match Veo de cadets) */
+function derive(F,sens){
+  if(F.length<3)return [];
+  const step=F[1][0]-F[0][0]||2,thr=[.10,.13,.16,.20,.24][sens-1],minD=[10,8,6,5,4][sens-1],hw=Math.max(1,Math.round(2/step));
+  const v=F.map(f=>f[1]>=5&&f[2]>=0?f[2]:null);
+  const sm=v.map((_,i)=>{const w=v.slice(Math.max(0,i-hw),i+hw+1).filter(x=>x!=null);return w.length>=Math.min(2,hw+1)?med(w):null});
+  let st=false;const dead=sm.map(x=>(st=x==null?st:x<thr));
+  const segs=[];let a=null;
+  dead.forEach((d,i)=>{if(d&&a==null)a=i;if(!d&&a!=null){segs.push([a,i-1]);a=null}});if(a!=null)segs.push([a,F.length-1]);
+  const merged=[];segs.forEach(s=>{const l=merged[merged.length-1];if(l&&s[0]-l[1]<=Math.max(1,Math.round(2/step)))l[1]=s[1];else merged.push([...s])});
+  return merged.filter(([i,j])=>F[j][0]-F[i][0]+step>=minD).map(([i,j])=>({a:Math.max(0,F[i][0]-step),b:F[j][0]}));
+}
+let curBlob=null;
+function aSrc(){const m=M(),s=m.src;
+  if(!s){toast('Charge d\'abord la vidéo du match');return null}
+  if(s.type==='yt'){toast('YouTube ne laisse pas analyser ses vidéos : utilise le fichier MP4 ou le lien Veo');return null}
+  if(s.type==='file'){if(!curBlob){toast('Rouvre le fichier vidéo pour lancer l\'analyse');return null}return {url:curBlob,key:'file:'+s.v}}
+  return {url:s.v,key:s.v};
+}
+function aStatus(t){$('#pTxt').textContent=t}
+function seekV(v,t){return new Promise((res,rej)=>{const to=setTimeout(()=>rej(new Error('seek')),30000);v.addEventListener('seeked',()=>{clearTimeout(to);res()},{once:true});v.currentTime=t})}
+async function runAuto(){
+  if(A.run){A.run=false;return}
+  const src=aSrc();if(!src)return;
+  const m=M();A.run=true;$('#bAuto').textContent='Arrêter';$('#prog').classList.remove('hid');
+  let lock=null;try{lock=await navigator.wakeLock.request('screen')}catch(e){}
+  try{
+    await aLoad(aStatus);
+    const v=document.createElement('video');v.crossOrigin='anonymous';v.muted=true;v.preload='auto';v.src=src.url;
+    await new Promise((res,rej)=>{v.onloadedmetadata=res;v.onerror=()=>rej(new Error('cors'))});
+    const step=+$('#aStep').value,dur=v.duration;
+    if(!(m.autoF&&m.autoKey===src.key&&m.autoStep===step)){m.autoF=[];m.autoKey=src.key;m.autoStep=step;m.autoDone=false}
+    let t=m.autoF.length?m.autoF[m.autoF.length-1][0]+step:0,prev=null,pt=null;
+    if(m.autoF.length){await seekV(v,t-step);prev=await aFrame(v);pt=t-step}
+    const t0=performance.now(),i0=m.autoF.length;let k=0;
+    while(A.run&&t<dur-.5){
+      await seekV(v,t);
+      let b;try{b=await aFrame(v)}catch(e){if(String(e).match(/insecure|tainted|cross/i))throw new Error('cors');throw e}
+      m.autoF.push(aFeat(+t.toFixed(1),b,prev,pt==null?step:t-pt));prev=b;pt=t;t+=step;k++;
+      const done=t/dur,rate=(performance.now()-t0)/k,left=(dur-t)/step*rate/1000;
+      $('#pbar').style.width=(100*Math.min(1,done))+'%';
+      aStatus(Math.round(100*done)+' % · encore ~'+(left>90?Math.round(left/60)+' min':Math.round(left)+' s')+' · '+b.length+' joueurs vus');
+      if(k%30===0){applyAuto(m);save();renderAll()}
+    }
+    if(t>=dur-.5)m.autoDone=true;
+    applyAuto(m);save();renderAll();$('#sensRow').classList.remove('hid');
+    const np=m.tags.filter(x=>x.auto).length;
+    aStatus(m.autoDone?'Analyse terminée · '+np+(np>1?' actions à valider':' action à valider'):'Analyse en pause à '+fmt(t)+' · relance pour reprendre');
+    if(m.autoDone)toast('Analyse terminée : '+np+(np>1?' actions':' action')+' à valider');
+  }catch(e){
+    console.error(e);
+    aStatus(e.message==='cors'?'Cette vidéo ne peut pas être analysée depuis ce lien. Télécharge-la et ouvre-la avec « Fichier vidéo… ».':e.message==='seek'?'La vidéo ne répond plus (connexion ?). Relance pour reprendre là où ça s\'est arrêté.':'Analyse impossible : '+e.message);
+    save();
+  }
+  A.run=false;$('#bAuto').textContent=M().autoF&&M().autoF.length&&!M().autoDone?'Reprendre l\'analyse':'Lancer l\'analyse';
+  try{lock&&lock.release()}catch(e){}
+}
+function applyAuto(m){
+  if(!m.autoF||!m.autoF.length)return;
+  const segs=derive(m.autoF,+$('#sens').value);
+  const keep=m.tags.filter(t=>!(t.g&&(t.auto||t.e==='live')));
+  const near=(e,t)=>keep.some(k=>k.e===e&&Math.abs(k.t-t)<6),add=[];
+  segs.forEach(s=>{const L={id:uid(),t:s.b,e:'live',team:null,g:1};
+    if(!near('live',s.b))add.push(L);
+    if(near('dead',s.a))return;
+    const known=keep.some(k=>SETP.includes(k.e)&&k.t>s.a-25&&k.t<s.b+10);
+    add.push(Object.assign({id:uid(),t:s.a,e:'dead',team:null,g:1,pair:L.id},known?{}:{auto:1}))});
+  m.tags=keep.concat(add);
+}
+/* ---------- import Veo ---------- */
+const SETP=['a_sc','a_lo','a_pen','scw','scl','low','lol','pen'];
+const VEOMAP={scrum:'a_sc',lineout:'a_lo',try_:'a_try',try:'a_try',conversion:'a_con',penalty:'a_pen',penalty_kick:'a_pen'};
+function importVeo(){
+  let d;try{d=JSON.parse($('#veoIn').value.trim())}catch(e){return toast('Texte non reconnu : relance le favori Import Veo sur la page du match')}
+  if(!d||!d.veo)return toast('Texte non reconnu : relance le favori Import Veo sur la page du match');
+  const m=M();
+  if(d.u){m.src={type:'url',v:d.u,url:d.u};$('#url').value=d.u;loadSource(m.src)}
+  if(d.t&&m.nE==='Adversaire'&&!m.tags.length)m.comp=m.comp||d.t;
+  m.tags=m.tags.filter(t=>!(t.veo&&t.auto));
+  let n=0;(d.e||[]).forEach(([t,ty])=>{const e=VEOMAP[ty];if(!e)return;if(m.tags.some(k=>k.veo&&k.t===t))return;m.tags.push({id:uid(),t,e,team:null,auto:1,veo:1});n++});
+  // les arrêts déjà détectés près d'une action Veo n'ont plus besoin d'être classés
+  m.tags.forEach(k=>{if(k.e==='dead'&&k.auto&&m.tags.some(v=>v.veo&&SETP.includes(v.e)&&v.t>k.t-10&&v.t<k.t+25))delete k.auto});
+  save();renderAll();$('#veoIn').value='';$('#fEv').value='__auto';renderTags();
+  toast(n+' actions Veo importées · à toi de dire qui les a gagnées');
+}
+$('#bVeo').onclick=importVeo;
+$('#bAuto').onclick=runAuto;
+$('#bNext').onclick=nextPending;
+$('#sens').oninput=()=>{applyAuto(M());save();renderAll()};
+
+/* ---------- navigation ---------- */
+function go(v){$$('nav [data-v]').forEach(b=>b.classList.toggle('on',b.dataset.v===v));$$('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v));if(v==='sta')renderStats();if(v==='sai')renderSeason()}
+$$('nav [data-v]').forEach(b=>b.onclick=()=>go(b.dataset.v));
+function renderAll(){renderHead();renderTags();if($('#v-sta').classList.contains('on'))renderStats();if($('#v-sai').classList.contains('on'))renderSeason()}
+function openMatch(){const m=M();renderAll();$('#sensRow').classList.toggle('hid',!(m.autoF&&m.autoF.length));$('#bAuto').textContent=m.autoF&&m.autoF.length&&!m.autoDone?'Reprendre l\'analyse':'Lancer l\'analyse';
+  if(m.src&&m.src.type!=='file'){$('#url').value=m.src.url||m.src.v;loadSource(m.src)}
+  else{$('#url').value='';loadSource(null);if(m.src&&m.src.type==='file')toast('Rouvre le fichier « '+m.src.v+' » pour reprendre la vidéo')}}
+renderPad();openMatch();
+}
+</script>
+</body>
+</html>
